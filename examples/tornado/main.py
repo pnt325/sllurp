@@ -28,10 +28,11 @@ to update a web page via websockets when rfid tags are seen.
 
 import sys
 import os
+import time
 sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..', '..')))
 
 from argparse import ArgumentParser
-from logging import getLogger, INFO, Formatter, StreamHandler, WARN
+from logging import getLogger, INFO, Formatter, StreamHandler, WARN, DEBUG
 
 from tornado.escape import json_decode
 from tornado.ioloop import IOLoop
@@ -49,7 +50,8 @@ tornado_main_ioloop = None
 
 
 def setup_logging():
-    logger.setLevel(INFO)
+    # logger.setLevel(INFO)
+    logger.setLevel(DEBUG)
     logFormat = '%(asctime)s %(name)s: %(levelname)s: %(message)s'
     formatter = Formatter(logFormat)
     handler = StreamHandler()
@@ -138,6 +140,7 @@ def convert_to_unicode(obj):
 def tag_seen_callback(reader, tags):
     """Function to run each time the reader reports seeing tags."""
     if tags:
+        logger.info('Got tag: ', tags)
         tags = convert_to_unicode(tags)
         tornado_main_ioloop.add_callback(MyWebSocketHandler.dispatch_tags,
                                          tags)
@@ -175,6 +178,12 @@ def parse_args():
                         help='Enable Impinj tag report content (Phase angle, '
                              'RSSI, Doppler)')
     return parser.parse_args()
+
+def onROSpecCallback():
+    logger.info('onROSpecCallback')
+
+def onConfigCallback():
+    logger.info('onConfigCallback')
 
 
 def main(args):
@@ -242,6 +251,7 @@ def main(args):
 
         config = LLRPReaderConfig(factory_args)
         reader = LLRPReaderClient(host, port, config)
+
         reader.add_tag_report_callback(tag_seen_callback)
 
         reader_clients.append(reader)
@@ -249,6 +259,69 @@ def main(args):
     try:
         for reader in reader_clients:
             reader.connect()
+            time.sleep(3);
+
+            rospec = {
+                'ROSpecID':123,
+                'CurrentState': 0,
+                'ROBoundarySpec':{
+                    'ROSpecStartTrigger':{
+                        'ROSpecStartTriggerType': 1
+                    },
+                    'ROSpecStopTrigger':{
+                        'ROSpecStopTriggerType': 0
+                    }
+                },
+                'AISpec':{
+                    'AntennaIDs':['1'],
+                    'AISpecStopTrigger':{
+                        'AISpecStopTriggerType': 3,
+                        'DurationTrigger': 0,
+                        'TagObservationTrigger':{
+                            'TriggerType': 0,
+                            'NumberOfTags': 1,
+                            'NumberOfAttempts': 1,
+                            'T': 0,
+                            'Timeout': 5000
+                        },
+                        'InventoryParameterSpec':[
+                            {'InventoryParameterSpecID': 1234,'ProtocolID': 1}
+                        ],
+                    }
+                },
+                'ROReportSpec':{
+                    'ROReportTrigger': 2,
+                    'N': 1,
+                    'TagReportContentSelector':{
+                        'EnableAntennaID': True
+                    }
+                }
+            }
+
+            # 1. Stop ROSpec
+            reader.llrp.send_STOP_ROSPEC(rospec, onROSpecCallback)
+            time.sleep(3);
+
+            # 2. Delete ROSPec
+            reader.llrp.send_DELETE_ROSPEC(rospec, onROSpecCallback)
+            time.sleep(3);
+
+            # 3. Reset factory reset
+            reader.llrp.send_SET_READER_CONFIG(onConfigCallback)
+            time.sleep(3);
+
+            # 4. Add ROSPec
+            reader.llrp.send_ADD_ROSPEC(rospec, onROSpecCallback)
+            time.sleep(3);
+
+            # 5. Enable ROSpec
+            reader.llrp.send_ENABLE_ROSPEC(rospec, onROSpecCallback)
+            time.sleep(3);
+
+            # 6. Start ROSpec
+            reader.llrp.send_START_ROSPEC(rospec, onROSpecCallback)
+            time.sleep(3);
+
         tornado_main_ioloop.start()
     finally:
         logger.info("Exit detected! Stopping readers...")

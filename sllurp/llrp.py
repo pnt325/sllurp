@@ -292,6 +292,7 @@ class LLRPReaderState(object):
     STATE_PAUSING = 22
     STATE_PAUSED = 23
     STATE_SENT_ENABLE_IMPINJ_EXTENSIONS = 24
+    STATE_SEND_STOP_ROSPEC = 25
 
     @classmethod
     def getStates(cls):
@@ -840,23 +841,23 @@ class LLRPClient(object):
     def send_SET_READER_CONFIG(self, onCompletion):
         msg = {
             'SET_READER_CONFIG': {
-                'ResetToFactoryDefaults': False,
-                'ReaderEventNotificationSpec': {
-                    'EventNotificationState': {
-                        'HoppingEvent': False,
-                        'GPIEvent': False,
-                        'ROSpecEvent': False,
-                        'ReportBufferFillWarning': False,
-                        'ReaderExceptionEvent': False,
-                        'RFSurveyEvent': False,
-                        'AISpecEvent': False,
-                        'AISpecEventWithSingulation': False,
-                        'AntennaEvent': False,
-                        ## Next one will only be available
-                        ## with llrp v2 (spec 1_1)
-                        #'SpecLoopEvent': False,
-                    },
-                },
+                'ResetToFactoryDefaults': True,
+                # 'ReaderEventNotificationSpec': {
+                #     'EventNotificationState': {
+                #         'HoppingEvent': False,
+                #         'GPIEvent': False,
+                #         'ROSpecEvent': False,
+                #         'ReportBufferFillWarning': False,
+                #         'ReaderExceptionEvent': False,
+                #         'RFSurveyEvent': False,
+                #         'AISpecEvent': False,
+                #         'AISpecEventWithSingulation': False,
+                #         'AntennaEvent': False,
+                #         ## Next one will only be available
+                #         ## with llrp v2 (spec 1_1)
+                #         #'SpecLoopEvent': False,
+                #     },
+                # },
             }
         }
         if self.config.keepalive_interval > 0:
@@ -879,6 +880,28 @@ class LLRPClient(object):
         self.setState(LLRPReaderState.STATE_SENT_SET_CONFIG)
         self._deferreds['SET_READER_CONFIG_RESPONSE'].append(
             onCompletion)
+
+    def send_STOP_ROSPEC(self, rospec, onCompletion):
+        logger.debugfast('about to send_STOP_ROSPEC')
+        self.sendMessage({
+            'STOP_ROSPEC':{
+                'ROSpecID': rospec['ROSpecID']
+            }
+        })
+        logger.debugfast('sent STOP_ROSPEC')
+        self.setState(LLRPReaderState.STATE_SEND_STOP_ROSPEC)
+        self._deferreds['STOP_ROSPEC_RESPONSE'].append(onCompletion)
+
+    def send_DELETE_ROSPEC(self, rospec, onCompletion):
+        logger.debugfast('about to send_DELETE_ROSPEC')
+        self.sendMessage({
+            'DELETE_ROSPEC':{
+                'ROSpecID': rospec['ROSpecID']
+            }
+        })
+        logger.debugfast('sent DELETE_ROSPEC')
+        self.setState(LLRPReaderState.STATE_SENT_DELETE_ROSPEC)
+        self._deferreds['DELETE_ROSPEC_RESPONSE'].append(onCompletion)
 
     def send_ADD_ROSPEC(self, rospec, onCompletion):
         logger.debugfast('about to send_ADD_ROSPEC')
